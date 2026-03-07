@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_NAME="clauded"
+IMAGE_NAME="sandclaude"
 CLAUDE_CONFIG="$HOME/.claude"
 
 usage() {
-    echo "Usage: clauded [-s] [-b] [-r] [-h] [workspace]"
+    echo "Usage: sandclaude [-s] [-b] [-r] [-h] [workspace]"
     echo ""
     echo "Run Claude Code in a Docker container."
     echo ""
