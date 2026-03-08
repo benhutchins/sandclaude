@@ -62,6 +62,4 @@ USER claude
 ENV HOME=/home/claude
 ENV GOPATH=/home/claude/go
 ENV PATH="/home/claude/go/bin:${PATH}"
-WORKDIR /workspace
-
 ENTRYPOINT ["claude", "--dangerously-skip-permissions"]

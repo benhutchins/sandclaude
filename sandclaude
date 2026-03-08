@@ -16,7 +16,7 @@ usage() {
     echo "  -h    Show this help message"
     echo ""
     echo "Arguments:"
-    echo "  workspace   Path to mount as /workspace (default: current directory)"
+    echo "  workspace   Path to mount inside the container (default: current directory)"
 }
 
 SHELL_MODE=false
@@ -33,7 +33,7 @@ while getopts "sbrh" opt; do
 done
 shift $((OPTIND - 1))
 
-WORKSPACE="${1:-$(pwd)}"
+WORKSPACE="$(readlink -f "${1:-$(pwd)}")"
 
 if [ ! -f "$CLAUDE_CONFIG/.credentials.json" ]; then
     echo "Error: No Claude credentials found at $CLAUDE_CONFIG/.credentials.json"
@@ -79,7 +79,8 @@ DOCKER_ARGS=(
     -v "$HOME/.config/.jira:/home/claude/.config/.jira:ro"
     ${GH_TOKEN:+-e GH_TOKEN="$GH_TOKEN"}
     ${JIRA_API_TOKEN:+-e JIRA_API_TOKEN="$JIRA_API_TOKEN"}
-    -v "$WORKSPACE:/workspace"
+    -v "$WORKSPACE:$WORKSPACE"
+    -w "$WORKSPACE"
 )
 
 if [ "$SHELL_MODE" = true ]; then
