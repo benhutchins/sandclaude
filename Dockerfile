@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc-aarch64-linux-gnu \
     gcc-arm-linux-gnueabi \
     gcc-mingw-w64-x86-64 \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 22
@@ -50,16 +51,23 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 RUN curl -fsSL https://github.com/ankitpokhrel/jira-cli/releases/download/v1.7.0/jira_1.7.0_linux_x86_64.tar.gz \
     | tar -xz -C /usr/local/bin --strip-components=2 jira_1.7.0_linux_x86_64/bin/jira
 
-RUN npm install -g @anthropic-ai/claude-code
-
 # Run as non-root user matching host UID/GID (overridable at runtime)
 ARG USER_ID=1000
 ARG GROUP_ID=1000
 RUN groupadd -f -g ${GROUP_ID} claude && \
-    useradd -m -u ${USER_ID} -g claude -o claude
+    useradd -m -u ${USER_ID} -g claude -o claude && \
+    echo "claude ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/claude
 
 USER claude
 ENV HOME=/home/claude
 ENV GOPATH=/home/claude/go
 ENV PATH="/home/claude/go/bin:${PATH}"
-ENTRYPOINT ["claude", "--dangerously-skip-permissions"]
+
+# Install Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/home/claude/.claude/bin:/home/claude/.local/bin:${PATH}"
+ENV TERM=xterm-256color
+
+COPY --chown=claude:claude entrypoint.sh /home/claude/entrypoint.sh
+
+ENTRYPOINT ["/home/claude/entrypoint.sh"]

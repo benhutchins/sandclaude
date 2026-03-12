@@ -86,7 +86,7 @@ DOCKER_ARGS=(
 if [ "$SHELL_MODE" = true ]; then
     exec docker run "${DOCKER_ARGS[@]}" --entrypoint /bin/bash "$IMAGE_NAME"
 elif [ "$RESUME" = true ]; then
-    exec docker run "${DOCKER_ARGS[@]}" "$IMAGE_NAME" claude --resume
+    exec docker run "${DOCKER_ARGS[@]}" "$IMAGE_NAME" --resume
 else
     exec docker run "${DOCKER_ARGS[@]}" "$IMAGE_NAME"
 fi
