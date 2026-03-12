@@ -94,12 +94,20 @@ echo "Starting Claude Code in: $WORKSPACE"
 # Extract tokens for use inside the container
 GH_TOKEN="$(gh auth token 2>/dev/null || true)"
 
+# On macOS, Claude stores OAuth credentials in the Keychain, not in files.
+# Extract them so the entrypoint can write them for Linux Claude Code.
+CLAUDE_CREDENTIALS=""
+if [[ "$OSTYPE" == darwin* ]]; then
+    CLAUDE_CREDENTIALS="$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null || true)"
+fi
+
 DOCKER_ARGS=(
     --rm -it
     -v "$CLAUDE_CONFIG:/home/claude/.claude"
     -v "$HOME/.claude.json:/home/claude/.claude.json"
     -v "$HOME/.config/gh:/home/claude/.config/gh:ro"
     ${GH_TOKEN:+-e GH_TOKEN="$GH_TOKEN"}
+    ${CLAUDE_CREDENTIALS:+-e CLAUDE_CREDENTIALS="$CLAUDE_CREDENTIALS"}
     -v "$WORKSPACE:$WORKSPACE"
     -w "$WORKSPACE"
 )
