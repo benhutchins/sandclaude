@@ -33,15 +33,16 @@ while getopts "sbrh" opt; do
 done
 shift $((OPTIND - 1))
 
-WORKSPACE="$(readlink -f "${1:-$(pwd)}")"
+WORKSPACE="$(cd "${1:-$(pwd)}" && pwd -P)"
 
-if [ ! -f "$CLAUDE_CONFIG/.credentials.json" ]; then
-    echo "Error: No Claude credentials found at $CLAUDE_CONFIG/.credentials.json"
-    echo "Run 'claude' locally first to log in via OAuth."
-    exit 1
-fi
-
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
+# Follow symlinks to find the real script location (macOS-compatible)
+SOURCE="$0"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd "$(dirname "$SOURCE")" && pwd -P)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd -P)"
 
 build_image() {
     if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
@@ -56,19 +57,41 @@ build_image() {
         "$SCRIPT_DIR"
 }
 
-if [ "$FORCE_BUILD" = true ]; then
-    build_image
-elif ! docker image inspect "$IMAGE_NAME" &>/dev/null; then
-    build_image
-elif [ -f "$SCRIPT_DIR/Dockerfile" ] && \
-     [ "$(stat -c %Y "$SCRIPT_DIR/Dockerfile")" -gt "$(docker inspect -f '{{.Created}}' "$IMAGE_NAME" 2>/dev/null | xargs -I{} date -d {} +%s 2>/dev/null || echo 0)" ]; then
+# Check if image needs (re)building
+needs_build() {
+    if ! docker image inspect "$IMAGE_NAME" &>/dev/null; then
+        return 0
+    fi
+    if [ ! -f "$SCRIPT_DIR/Dockerfile" ]; then
+        return 1
+    fi
+    # Compare Dockerfile modification time to image creation time
+    local dockerfile_mtime image_created image_epoch
+    if [[ "$OSTYPE" == darwin* ]]; then
+        dockerfile_mtime=$(stat -f %m "$SCRIPT_DIR/Dockerfile")
+    else
+        dockerfile_mtime=$(stat -c %Y "$SCRIPT_DIR/Dockerfile")
+    fi
+    image_created=$(docker inspect -f '{{.Created}}' "$IMAGE_NAME" 2>/dev/null || echo "")
+    if [ -z "$image_created" ]; then
+        return 0
+    fi
+    if [[ "$OSTYPE" == darwin* ]]; then
+        image_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${image_created%%.*}" +%s 2>/dev/null || echo 0)
+    else
+        image_epoch=$(date -d "$image_created" +%s 2>/dev/null || echo 0)
+    fi
+    [ "$dockerfile_mtime" -gt "$image_epoch" ]
+}
+
+if [ "$FORCE_BUILD" = true ] || needs_build; then
     build_image
 fi
 
 clear
 echo "Starting Claude Code in: $WORKSPACE"
 
-# Extract gh token from keyring for use inside the container
+# Extract tokens for use inside the container
 GH_TOKEN="$(gh auth token 2>/dev/null || true)"
 
 DOCKER_ARGS=(
@@ -76,9 +99,7 @@ DOCKER_ARGS=(
     -v "$CLAUDE_CONFIG:/home/claude/.claude"
     -v "$HOME/.claude.json:/home/claude/.claude.json"
     -v "$HOME/.config/gh:/home/claude/.config/gh:ro"
-    -v "$HOME/.config/.jira:/home/claude/.config/.jira:ro"
     ${GH_TOKEN:+-e GH_TOKEN="$GH_TOKEN"}
-    ${JIRA_API_TOKEN:+-e JIRA_API_TOKEN="$JIRA_API_TOKEN"}
     -v "$WORKSPACE:$WORKSPACE"
     -w "$WORKSPACE"
 )
